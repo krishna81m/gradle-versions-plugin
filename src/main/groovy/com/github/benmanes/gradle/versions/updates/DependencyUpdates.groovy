@@ -60,7 +60,10 @@ class DependencyUpdates {
     Map<Map<String, String>, String> projectUrls = status.findAll { it.projectUrl }.collectEntries {
       [[group: it.coordinate.groupId, name: it.coordinate.artifactId]: it.projectUrl]
     }
-    return createReporter(versions, unresolved, projectUrls)
+    Map<Map<String, String>, Date> projectDates = status.findAll { it.projectDate }.collectEntries {
+      [[group: it.coordinate.groupId, name: it.coordinate.artifactId]: it.projectDate]
+    }
+    return createReporter(versions, unresolved, projectUrls, projectDates)
   }
 
   private Set<DependencyStatus> resolveProjects(Map<Project, Set<Configuration>> projectConfigs) {
@@ -91,11 +94,15 @@ class DependencyUpdates {
   }
 
   private DependencyUpdatesReporter createReporter(
-    VersionMapping versions, Set<UnresolvedDependency> unresolved, Map<Map<String, String>, String> projectUrls) {
+    VersionMapping versions, Set<UnresolvedDependency> unresolved,
+      Map<Map<String, String>, String> projectUrls,
+      Map<Map<String, String>, Date> projectDates) {
     Map<Map<String, String>, String> currentVersions =
       versions.current.collectEntries { [[group: it.groupId, name: it.artifactId]: it.version] }
     Map<Map<String, String>, String> latestVersions =
       versions.latest.collectEntries { [[group: it.groupId, name: it.artifactId]: it.version] }
+//    Map<Map<String, String>, String> latestDates =
+//      versions.latest.collectEntries { [[group: it.groupId, name: it.artifactId]: it.] }
     Map<Map<String, String>, String> upToDateVersions =
       versions.upToDate.collectEntries { [[group: it.groupId, name: it.artifactId]: it.version] }
     Map<Map<String, String>, String> downgradeVersions = toMap(versions.downgrade)
@@ -106,7 +113,7 @@ class DependencyUpdates {
 
     return new DependencyUpdatesReporter(project, revision, outputFormatter, outputDir, reportfileName,
       currentVersions, latestVersions, upToDateVersions, downgradeVersions, upgradeVersions,
-      unresolved, projectUrls, gradleUpdateChecker, gradleReleaseChannel)
+      unresolved, projectUrls, projectDates, gradleUpdateChecker, gradleReleaseChannel)
   }
 
   private static Map<Map<String, String>, String> toMap(Set<Coordinate> coordinates) {

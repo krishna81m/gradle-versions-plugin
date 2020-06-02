@@ -15,4 +15,5 @@ class Dependency {
   String name
   String version
   String projectUrl
+  Date projectDate
 }

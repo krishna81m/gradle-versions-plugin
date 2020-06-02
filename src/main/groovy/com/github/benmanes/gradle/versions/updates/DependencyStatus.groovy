@@ -34,11 +34,13 @@ class DependencyStatus {
   final Coordinate coordinate
   final String latestVersion
   final String projectUrl
+  final Date projectDate
 
-  DependencyStatus(Coordinate coordinate, String latestVersion, String projectUrl) {
+  DependencyStatus(Coordinate coordinate, String latestVersion, String projectUrl, Date projectDate) {
     this.latestVersion = latestVersion
     this.coordinate = coordinate
     this.projectUrl = projectUrl
+    this.projectDate = projectDate
   }
 
   DependencyStatus(Coordinate coordinate, UnresolvedDependency unresolved) {
@@ -46,6 +48,7 @@ class DependencyStatus {
     this.unresolved = unresolved
     this.latestVersion = 'none'
     this.projectUrl = null
+    this.projectDate = null
   }
 
   Coordinate getLatestCoordinate() {

@@ -36,7 +36,7 @@ class GradleUpdateChecker {
       try {
         def versionObject = new JsonSlurper().parse(new URL(API_BASE_URL + it.id), [
           'connectTimeout': TIMEOUT_MS, 'readTimeout': TIMEOUT_MS])
-        if (versionObject.version) {
+        if (versionObject.version.blah) {
           cacheMap.put(it, new ReleaseStatus.Available(GradleVersion.version(versionObject.version as String)))
         } else {
           cacheMap.put(it, new ReleaseStatus.Unavailable())

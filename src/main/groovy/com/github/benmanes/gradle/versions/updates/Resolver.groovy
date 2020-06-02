@@ -16,6 +16,7 @@
 package com.github.benmanes.gradle.versions.updates
 
 import com.github.benmanes.gradle.versions.updates.resolutionstrategy.ResolutionStrategyWithCurrent
+import groovy.json.JsonSlurper
 import groovy.transform.CompileStatic
 import groovy.transform.TypeChecked
 import org.gradle.api.Action
@@ -46,6 +47,7 @@ import org.gradle.maven.MavenPomArtifact
 
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ConcurrentMap
+import java.util.concurrent.TimeUnit
 
 import static groovy.transform.TypeCheckingMode.SKIP
 import static org.gradle.api.specs.Specs.SATISFIES_ALL
@@ -55,14 +57,18 @@ import static org.gradle.api.specs.Specs.SATISFIES_ALL
  */
 @CompileStatic
 class Resolver {
+  private static final long TIMEOUT_MS = TimeUnit.SECONDS.toMillis(100)
+
   final Project project
   final Action<? super ResolutionStrategyWithCurrent> resolutionStrategy
   final boolean checkConstraints
   final ConcurrentMap<ModuleVersionIdentifier, ProjectUrl> projectUrls
+  final ConcurrentMap<ModuleVersionIdentifier, Date> projectDate
 
   Resolver(Project project, Action<? super ResolutionStrategyWithCurrent> resolutionStrategy,
            boolean checkConstraints) {
     this.projectUrls = new ConcurrentHashMap<>()
+    this.projectDate = new ConcurrentHashMap<>()
     this.resolutionStrategy = resolutionStrategy
     this.project = project
     this.checkConstraints = checkConstraints
@@ -95,7 +101,8 @@ class Resolver {
         project.logger.info("Skipping hidden dependency: ${resolvedCoordinate}")
       } else {
         String projectUrl = getProjectUrl(dependency.module.id)
-        result.add(new DependencyStatus(coord, resolvedCoordinate.version, projectUrl))
+        Date projectDate = getProjectDate(dependency.module.id)
+        result.add(new DependencyStatus(coord, resolvedCoordinate.version, projectUrl, projectDate))
       }
     }
     for (UnresolvedDependency dependency : unresolved) {
@@ -340,6 +347,55 @@ class Resolver {
       return pom.url
     }
     return pom.scm.url
+  }
+
+  /**
+   * Returns maven artifact publish date directly from maven central repository publish timestamp
+   * this is probably a rough estimate and not guaranteed to be the right date when it was published
+   *
+   * Uses maven SOLR search hack to check if a version exists for the exact same
+   * group, artifact and version
+   *
+   *  FIXME: optimization, these won't change and can be cached somewhere on local disk?
+   * @param id
+   * @return java.util.Date
+   */
+  private Date resolveProjectDate(ModuleVersionIdentifier id) {
+    Date projectDate = projectDate.get(id)
+    if(projectDate != null){
+      return projectDate;
+    }
+
+    try {
+       // def payload = new URL("http://search.maven.org/solrsearch/select?q=g:" + id.group + "+AND+a:" + id.name + "+AND+v:" + id.version + "&wt=json").text
+      URL url = new URL("http://search.maven.org/solrsearch/select?q=g:" + id.group + "+AND+a:" + id.name + "+AND+v:" + id.version + "&wt=json")
+
+// or do it cleanly with another dependency: import groovyx.net.http.URIBuilder
+//      def uri = new URIBuilder("http://search.maven.org/solrsearch/select")
+//      uri.addQueryParam 'rows', 20
+//      uri.addQueryParam 'wt', 'json'
+//      uri.addQueryParam 'q', args[0]
+//      def text = uri.toURL().getText()
+
+//      def versionObject = new JsonSlurper().parse(new URL(API_BASE_URL + it.id), [
+//        'connectTimeout': TIMEOUT_MS, 'readTimeout': TIMEOUT_MS])
+//      if (versionObject.version.blah) {
+//      }
+
+      def doc = new JsonSlurper().parse(url, [
+        'connectTimeout': TIMEOUT_MS, 'readTimeout': TIMEOUT_MS])
+
+      if(doc.response.docs) {
+        projectDate = new Date(doc.response.docs[0].timestamp)
+        this.projectDate.putIfAbsent(id, projectDate)
+      } else {
+        project.logger.debug("cannot find project date for ${id}")
+      }
+    //  catch any JsonException | MissingPropertyException
+    } catch (Exception e) {
+      project.logger.info("Failed to resolve project's date", e)
+    }
+    return projectDate
   }
 
   @TypeChecked(SKIP)
